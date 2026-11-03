@@ -58,4 +58,18 @@ describe('Progresso persistente — oficina e escolhas',()=>{
   expect(normalizeState(world,{...s,seed:42})).toBe(null);
   expect(normalizeState(world,{...s,player:{...s.player,x:Infinity}})).toBe(null);
  });
+
+ it('recupera save antigo salvo dentro da oficina e mantém saída coerente',()=>{
+  const s=initialState(world);const oficina=world.buildings.find(b=>b.name==='Oficina Valença')!;
+  s.player.x=oficina.entrance.x;s.player.z=oficina.entrance.z-oficina.entrance.side*2.15;
+  const legacy=JSON.parse(JSON.stringify(s));delete legacy.interiorId;
+  const restored=normalizeState(world,legacy)!;
+  expect(restored.interiorId).toBe(oficina.id);
+  expect(restored.player.x).toBe(s.player.x);
+  expect(restored.player.z).toBe(s.player.z);
+ });
+ it('não restaura estado de interior falso se personagem estiver do lado de fora',()=>{
+  const s=initialState(world);s.interiorId='BLD-BLK-SA-01-LOT-N1';
+  expect(normalizeState(world,s)?.interiorId).toBe(null);
+ });
 });

@@ -8,7 +8,7 @@ export type MissionState = {id:'m01'|'m02'|'m03'|'end';step:number;completed:str
 export type SaveState = {
   schemaVersion:1;generatorVersion:string;seed:number;
   player:{x:number;z:number;health:number;money:number};
-  vehicle:{x:number;z:number;yaw:number};
+  vehicle:{x:number;z:number;yaw:number};interiorId:string|null;
   mission:MissionState;owned:string[];renovated:string[];belloriDecision:'respect'|'refuse'|null;
   clock:number;heat:number;lastCycle:number;reputation:Record<string,number>;
 };
@@ -16,7 +16,7 @@ export const SAVE_KEY='imperio_reis_porto_slot_1';
 export function initialState(world:CityManifest):SaveState{return {
   schemaVersion:1,generatorVersion:world.generatorVersion,seed:world.seed,
   player:{x:-87,z:-87,health:100,money:500},
-  vehicle:{x:-85,z:-92,yaw:0},mission:{id:'m01',step:0,completed:[]},
+  vehicle:{x:-85,z:-92,yaw:0},interiorId:null,mission:{id:'m01',step:0,completed:[]},
   owned:['Oficina Valença'],renovated:[],belloriDecision:null,clock:540,heat:0,lastCycle:8,
   reputation:{valenca:15,bellori:0,calder:0,aurora:0,mare_negra:0}
 };}
@@ -30,9 +30,15 @@ export function normalizeState(world:CityManifest,raw:unknown):SaveState|null{
   if(!Array.isArray(s.owned)||!s.owned.every(x=>typeof x==='string')||!Number.isFinite(s.clock)||!Number.isFinite(s.lastCycle)||!Number.isFinite(s.heat))return null;
   if(!s.reputation||typeof s.reputation!=='object')return null;
   const vehicle=s.vehicle&&Number.isFinite(s.vehicle.x)&&Number.isFinite(s.vehicle.z)&&Number.isFinite(s.vehicle.yaw)?s.vehicle:base.vehicle;
+  // Saves REV1 não guardavam o imóvel: recuperar o interior pelo volume realmente ocupado.
+  // Saves com interiorId inválido não deixam o jogador atravessar um prédio fechado.
+  const standingInside=world.buildings.find(b=>b.enterable&&
+    s.player!.x>b.bounds.minX+.45&&s.player!.x<b.bounds.maxX-.45&&
+    s.player!.z>b.bounds.minZ+.45&&s.player!.z<b.bounds.maxZ-.45);
+  const interiorId=standingInside?.id??null;
   const renovated=Array.isArray(s.renovated)&&s.renovated.every(x=>typeof x==='string')?s.renovated.filter(x=>x===WORKSHOP_ID):[];
   const belloriDecision=s.belloriDecision==='respect'||s.belloriDecision==='refuse'?s.belloriDecision:null;
-  return {...s,vehicle:{...vehicle},belloriDecision,renovated:[...new Set(renovated)],player:{...s.player},mission:{...s.mission,completed:[...s.mission.completed]},owned:[...s.owned],reputation:{...base.reputation,...s.reputation}} as SaveState;
+  return {...s,vehicle:{...vehicle},interiorId,belloriDecision,renovated:[...new Set(renovated)],player:{...s.player},mission:{...s.mission,completed:[...s.mission.completed]},owned:[...s.owned],reputation:{...base.reputation,...s.reputation}} as SaveState;
 }
 export function loadState(world:CityManifest):SaveState|null{try{return normalizeState(world,JSON.parse(localStorage.getItem(SAVE_KEY)||'null'));}catch{return null;}}
 export function saveState(s:SaveState):boolean{try{localStorage.setItem(SAVE_KEY,JSON.stringify(s));return true;}catch{return false;}}

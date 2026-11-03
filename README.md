@@ -67,3 +67,17 @@ Caso o build falhe, o workflow não substitui a versão estável em `main`.
 **Teste de produção:** acesse a URL do Pages, abra o console do navegador,
 confirme ausência de requisição para `/src/main.ts` e presença de recursos em `./assets/`.
 Os testes automatizados não substituem esse teste visual no navegador.
+
+
+## REV3 — Vertical slice de Santa Ângela (Fases 1 e 2 do GDD)
+
+- **Acesso por fachada correta:** portas só respondem ao jogador na calçada correspondente; a saída de interiores exige proximidade da porta. A transição por `E` cruza apenas o vão do imóvel, sem salto entre ambientes.
+- **NPCs de campanha:** Helena Valença dentro da oficina e Rafael dentro do bar. As três etapas do prólogo agora avançam ao **conversar** com os personagens, não simplesmente atravessando a porta.
+- **Vitrines `shell` reais:** profundidade de 4,2 metros, vidros, teto, piso, parede posterior e duas tipologias de exposição; imóveis `none` continuam inacessíveis.
+- **Ambientes distintos:** oficina com elevador e armários; bar com mesas e estantes, todos com volumes simplificados de colisão.
+- **Saves dentro de imóveis:** estado de interior é recuperado pelo volume do imóvel ao carregar, inclusive para partidas REV1.
+- **Inspeção F3:** segure `ALT` e clique em um prédio para visualizar os IDs da rua, quadra, lote e categoria do interior.
+- **Cidade:** vitrines laterais para esquinas, faixas de travessia nos cruzamentos e validador de orientação das entradas.
+
+**Verificações:** `npm run test`, `npm run qa:sanity`, `npm run build` e leitura do relatório `docs/QA_EVIDENCIAS.md`.
+**Limites:** interiores multinível, diálogos com animações, NPCs com rotina diária e toda a campanha permanecem para revisões posteriores. O prólogo ainda precisa de certificação de percurso humano no navegador.

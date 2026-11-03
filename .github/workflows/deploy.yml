@@ -20,6 +20,7 @@ jobs:
           node-version: '22'
       - run: npm install --no-audit --no-fund
       - run: npm run test
+      - run: npm run qa:sanity
       - run: npm run build
       # Compatível com as duas fontes de Pages: GitHub Actions e branch main /.
       # A raiz nunca deve publicar index.html com /src/main.ts.

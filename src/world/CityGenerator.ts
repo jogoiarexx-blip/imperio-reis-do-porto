@@ -63,10 +63,21 @@ export function validateCity(world:CityManifest):string[]{
  for(let i=0;i<world.buildings.length;i++){
   const b=world.buildings[i];if(buildingIds.has(b.id))errors.push(`Prédio duplicado: ${b.id}`);buildingIds.add(b.id);
   const l=world.lots.find(x=>x.id===b.lotId);if(!l)errors.push(`Lote ausente: ${b.id}`);
-  else if(b.bounds.minX<l.bounds.minX||b.bounds.maxX>l.bounds.maxX||b.bounds.minZ<l.bounds.minZ||b.bounds.maxZ>l.bounds.maxZ)errors.push(`Prédio fora do lote: ${b.id}`);
+  else{
+    if(b.bounds.minX<l.bounds.minX||b.bounds.maxX>l.bounds.maxX||b.bounds.minZ<l.bounds.minZ||b.bounds.maxZ>l.bounds.maxZ)errors.push(`Prédio fora do lote: ${b.id}`);
+    if(b.streetId!==l.streetId||b.blockId!==l.blockId)errors.push(`Edifício com rua/quadra divergente: ${b.id}`);
+    const expectedSide=l.id.includes('-LOT-N')?-1:1;
+    if(b.entrance.side!==expectedSide)errors.push(`Porta no lado incorreto do quarteirão: ${b.id}`);
+    const front=expectedSide===-1?b.bounds.minZ:b.bounds.maxZ;
+    if(Math.abs(b.entrance.x-(b.bounds.minX+b.bounds.maxX)/2)>.15||Math.abs(b.entrance.z-front)>.15)errors.push(`Porta desalinhada com fachada: ${b.id}`);
+    const streetFront=expectedSide===-1?l.bounds.minZ:l.bounds.maxZ;
+    if(Math.abs(streetFront-front)>1.6)errors.push(`Entrada distante da calçada: ${b.id}`);
+  }
   if(b.enterable&&b.tier!=='full')errors.push(`Interior inacessível: ${b.id}`);
   for(let j=i+1;j<world.buildings.length;j++)if(overlaps(b.bounds,world.buildings[j].bounds))errors.push(`Sobreposição: ${b.id}`);
  }
- if(world.buildings.filter(b=>b.tier==='full').length!==2)errors.push('Esperados dois interiores completos');
+ if(world.buildings.filter(b=>b.tier==='full'&&b.enterable).length!==2)errors.push('Esperados dois interiores completos');
+ if(world.buildings.filter(b=>b.tier==='shell').length<2)errors.push('Esperadas duas vitrines parciais');
+ if(world.buildings.filter(b=>b.tier==='none').length<1)errors.push('Esperadas fachadas não acessíveis');
  return errors;
 }
