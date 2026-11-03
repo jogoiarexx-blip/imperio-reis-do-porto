@@ -3,7 +3,7 @@ import './style.css';
 import {generateCity,validateCity,type Building} from './world/CityGenerator';
 import {buildCity,contains} from './world/renderCity';
 import {doorDistance,isNearNpc,nearestStreetDoor,transitionAtDoor} from './game/Interaction';
-import {advanceMission,chooseBellori,clockText,initialState,loadState,missionObjective,missionTitles,renovateWorkshop,saveState,tickEconomy,WORKSHOP_ID,WORKSHOP_RENOVATED_INCOME,WORKSHOP_BASE_INCOME,RENOVATION_COST,type SaveState} from './game/Systems';
+import {advanceMission,chooseBellori,clockText,initialState,loadState,missionObjective,missionTitles,renovateWorkshop,saveState,tickEconomy,WORKSHOP_ID,WORKSHOP_RENOVATED_INCOME,WORKSHOP_BASE_INCOME,RENOVATION_COST,tickMission,retryMission,missionDestination,type SaveState} from './game/Systems';
 
 const $=(id:string)=>document.getElementById(id)!;
 const world=generateCity(8821),errors=validateCity(world);
@@ -72,6 +72,12 @@ function updateUI(){
  $('health').textContent=String(Math.round(state.player.health));$('money').textContent=`R$ ${Math.round(state.player.money).toLocaleString('pt-BR')}`;
  $('heat').textContent='■'.repeat(Math.min(5,state.heat))+'□'.repeat(5-Math.min(5,state.heat));
  $('clock').textContent=clockText(state.clock);$('mission-title').textContent=missionTitles[state.mission.id];$('mission-objective').textContent=missionObjective(state);
+ $('btn-retry').classList.toggle('hidden',state.missionRuntime.status!=='failed');
+ const destination=missionDestination(state);
+ const target=world.buildings.find(b=>b.name===destination);
+ const meters=target?Math.round(Math.hypot(state.player.x-target.entrance.x,state.player.z-target.entrance.z)):0;
+ $('mission-navigation').textContent=state.missionRuntime.status==='failed'?'CHECKPOINT DISPONÍVEL · R PARA REPETIR':
+   target?`DESTINO · ${destination?.toUpperCase()} · ${meters} M`:'CAMPANHA INICIAL CONCLUÍDA';
  const b=nearestStreetDoor(world,state.player.x,state.player.z);
  const carDist=Math.hypot(state.player.x-parkedCar.position.x,state.player.z-parkedCar.position.z);
  const prompt=inside
@@ -83,7 +89,20 @@ function updateUI(){
 function openModal(title:string,body:string,kicker='PORTO VESPER',actions?:{label:string;run:()=>void}[]){paused=true;$('modal-title').textContent=title;$('modal-kicker').textContent=kicker;$('modal-body').innerHTML=body;
  const slot=$('modal-actions');slot.innerHTML='';for(const a of actions??[{label:'VOLTAR AO JOGO',run:closeModal}]){const b=document.createElement('button');b.textContent=a.label;b.className='primary';b.addEventListener('click',a.run);slot.appendChild(b);} $('modal').classList.remove('hidden');}
 function closeModal(){paused=false;$('modal').classList.add('hidden');}
+function retryFromCheckpoint(){
+ if(!retryMission(state))return;
+ inside=world.buildings.find(b=>b.id===state.interiorId)??null;driving=false;
+ syncVehicle();syncAvatar();applyWorldState();closeModal();keys.clear();
+ saveState(state);showNotice('Retomado do último checkpoint. Recompensas e reformas preservadas.',5);
+}
+function missionFailed(){
+ saveState(state);keys.clear();
+ openModal('Missão não concluída',`<p>${state.missionRuntime.failureReason||'A missão falhou.'}</p><p>Você pode repetir o objetivo atual sem perder seu dinheiro, imóveis ou escolhas de história.</p>`,
+ 'CHECKPOINT · SANTA ÂNGELA',[{label:'REPETIR DO CHECKPOINT',run:retryFromCheckpoint},{label:'CONTINUAR EXPLORANDO',run:closeModal}]);
+}
+
 function talkToResident(b:Building){
+ if(state.missionRuntime.status==='failed'){showNotice('Missão falhou. Pressione R para retomar do checkpoint.',3);return;}
  const dialogue=advanceMission(state,b.name);
  if(dialogue){showNotice(dialogue,7);saveState(state);}else showNotice(b.kind==='Oficina'?'Helena: "A oficina é nossa. Proteja o que construímos."':'Rafael: "Nosso acordo depende de confiança."',4);
  if(state.mission.id==='m02'&&state.mission.step===1&&!state.belloriDecision&&b.name==='Bar Atlântico'){
@@ -137,13 +156,14 @@ function empireModal(){
 }
 function mapModal(){const placeList=world.buildings.filter(b=>b.tier==='full').map(b=>`<div class="business-card"><h3>${b.name}</h3><p>Quadra ${b.blockId.replace('BLK-SA-','')} · ${b.kind} · Interior completo${state.renovated.includes(b.id)?' · REFORMADO':''}</p></div>`).join('');
  openModal('Mapa do bairro',`<p><strong>Santa Ângela:</strong> 4 quarteirões, 28 imóveis contíguos e 6 segmentos de rua.</p>${placeList}<p class="small-note">Os outros distritos de Porto Vesper estão previstos no GDD, mas ainda não são exploráveis.</p>`,'GEOGRAFIA URBANA · SANTA ÂNGELA');}
-$('btn-start').addEventListener('click',()=>{started=true;$('intro').classList.add('hidden');showNotice('Dante Valença está de volta a Porto Vesper. Vá até a Oficina Valença.',6);});
+$('btn-start').addEventListener('click',()=>{started=true;$('intro').classList.add('hidden');if(state.missionRuntime.status==='failed')missionFailed();else showNotice('Dante Valença está de volta a Porto Vesper. Vá até a Oficina Valença.',6);});
 $('btn-save').addEventListener('click',()=>showNotice(saveState(state)?'Partida salva neste navegador.':'Não foi possível salvar nesta sessão.',3));
-$('btn-load').addEventListener('click',()=>{const saved=loadState(world);if(!saved){showNotice('Nenhum save compatível encontrado.',3);return;}state=saved;inside=world.buildings.find(b=>b.id===saved.interiorId)??null;driving=false;syncVehicle();applyWorldState();syncAvatar();showNotice('Partida restaurada.',3);});
-$('btn-empire').addEventListener('click',empireModal);$('btn-map').addEventListener('click',mapModal);
+$('btn-load').addEventListener('click',()=>{const saved=loadState(world);if(!saved){showNotice('Nenhum save compatível encontrado.',3);return;}state=saved;inside=world.buildings.find(b=>b.id===saved.interiorId)??null;driving=false;syncVehicle();applyWorldState();syncAvatar();if(state.missionRuntime.status==='failed')missionFailed();else showNotice('Partida restaurada.',3);});
+$('btn-empire').addEventListener('click',empireModal);$('btn-map').addEventListener('click',mapModal);$('btn-retry').addEventListener('click',retryFromCheckpoint);
 window.addEventListener('keydown',e=>{if(['KeyW','KeyA','KeyS','KeyD','Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();keys.add(e.code);
  if(e.code==='F3'){e.preventDefault();inspectorOpen=!inspectorOpen;$('inspector').classList.toggle('hidden',!inspectorOpen);return;}
  if(e.repeat||!started)return;if(e.code==='Escape'){if(!$('modal').classList.contains('hidden'))closeModal();else openModal('Jogo pausado','<p>O relógio, o tráfego e a simulação ficam suspensos enquanto o menu estiver aberto.</p>');return;}
+ if(e.code==='KeyR'&&state.missionRuntime.status==='failed'){retryFromCheckpoint();return;}
  if(paused)return;
  if(e.code==='KeyE')interact();if(e.code==='KeyI')empireModal();if(e.code==='KeyM')mapModal();if(e.code==='KeyL')showNotice(saveState(state)?'Partida salva.':'Falha ao salvar.',3);
  if(e.code==='KeyQ'){covered=!covered;showNotice(covered?'Cobertura ativada (protótipo).':'Cobertura desativada.',2);}
@@ -204,7 +224,7 @@ function atmosphere(){const t=(state.clock%1440)/1440,day=Math.max(0,Math.sin(Ma
  sun.intensity=.18+day*2.4;hemi.intensity=.3+day*1.7;sun.position.set(Math.sin(t*Math.PI*2)*80,12+day*90,-50);
 }
 let frame=0,fpsTime=0,frames=0;function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.05);
- if(started&&!paused){movement(dt);state.clock+=dt*.52;if(state.clock>=1440){state.clock-=1440;state.lastCycle=-1;}
+ if(started&&!paused){movement(dt);if(tickMission(state,dt))missionFailed();state.clock+=dt*.52;if(state.clock>=1440){state.clock-=1440;state.lastCycle=-1;}
   tickEconomy(state);
   if(frame%18===0)applyWorldState();
   for(const c of movingCars){c.t+=dt*c.speed/routeLength(c.route)*c.route.length;moveAround(c.route,c.t,c.mesh);}

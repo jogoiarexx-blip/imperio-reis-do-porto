@@ -50,6 +50,7 @@ describe('Progresso persistente — oficina e escolhas',()=>{
   s.mission.id='m02';s.mission.step=1;
   expect(advanceMission(s,'Oficina Valença')).toBeTruthy();
   expect(s.mission.id).toBe('m03');expect(s.mission.step).toBe(1);
+  expect(advanceMission(s,'Oficina Valença')).toBeTruthy();
   expect(advanceMission(s,'Bar Atlântico')).toBeTruthy();
   expect(s.mission.id).toBe('end');
  });

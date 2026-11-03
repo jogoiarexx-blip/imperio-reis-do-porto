@@ -1,3 +1,21 @@
+# QA verificável — REV4 (03/11/2026)
+
+## Resumo antes/depois
+
+A REV3 permitia avançar M01–M03 apenas pelas etapas, sem missão falha nem retry explícito. A REV4 adiciona FSM com `active/failed/finished`, checkpoint serializável por etapa, backup de save, retirada de documentos, entrega com prazo e UI de repetição. Não foi expandido o mapa. A comparação detalhada está em [QA_REV4_MISSOES.md](QA_REV4_MISSOES.md).
+
+| ID | Funcionalidade | Estado verificado | Evidência | Regressão? |
+| --- | --- | --- | --- | --- |
+| MISSION-101 | M01/M02 avançam sem recompensa dupla | pass (lógica local) | testes determinísticos e compilação isolada TypeScript | Não observada |
+| MISSION-102 | M03 retira documentos antes de entregar | pass (lógica local) | `tests/mission-fsm.test.ts` | Não observada |
+| MISSION-103 | Timer, falha, retry, reload e backup | pass (lógica local) | `tests/mission-fsm.test.ts` | Não observada |
+| MAP-101 | Rota externa entre oficina e bar sem prédio atravessado | pass (rota espacial automatizada) | `tests/mission-fsm.test.ts` | Não observada |
+| CI-101 | Vitest, verificação TS/Vite e publicação Pages | pending CI | GitHub Actions após commit | Não verificada |
+| PLAY-101 | Percurso humano integral com navegação e diálogos | not run | Teste no Chromium após publicação | Não certificada |
+| PERF-101 | FPS e draw calls antes/depois | not run | Aferição em navegador com mesma rota | Não certificada |
+
+## Histórico
+
 # QA verificável — REV3 (03/11/2026)
 
 ## Base de comparação

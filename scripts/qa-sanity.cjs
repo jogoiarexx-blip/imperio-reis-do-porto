@@ -1,7 +1,7 @@
 const fs=require('fs'),path=require('path'),assert=require('node:assert/strict');
 const ts=require('typescript');
 const root=path.resolve(__dirname,'..'),tmp=path.join(root,'.qa-tmp');fs.mkdirSync(tmp,{recursive:true});fs.writeFileSync(path.join(tmp,'package.json'),'{"type":"commonjs"}');
-const files=['src/world/CityGenerator.ts','src/game/Systems.ts','src/game/Interaction.ts','src/world/renderCity.ts','src/main.ts','tests/city.test.ts','tests/progress.test.ts','tests/interaction.test.ts','tests/validator.test.ts'];
+const files=['src/world/CityGenerator.ts','src/game/Systems.ts','src/game/Interaction.ts','src/world/renderCity.ts','src/main.ts','tests/city.test.ts','tests/progress.test.ts','tests/interaction.test.ts','tests/validator.test.ts','tests/mission-fsm.test.ts'];
 for(const f of files){const code=fs.readFileSync(path.join(root,f),'utf8');const r=ts.transpileModule(code,{fileName:f,reportDiagnostics:true,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}});
  const errors=(r.diagnostics||[]).filter(x=>x.category===ts.DiagnosticCategory.Error);assert.equal(errors.length,0,`${f}: ${errors.map(x=>ts.flattenDiagnosticMessageText(x.messageText,' '))}`);
  if(f.startsWith('src/world/City')||f.startsWith('src/game/')){const out=path.join(tmp,f.replace(/\.ts$/,'.js'));fs.mkdirSync(path.dirname(out),{recursive:true});fs.writeFileSync(out,r.outputText);}}

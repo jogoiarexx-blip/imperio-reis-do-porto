@@ -81,3 +81,7 @@ Os testes automatizados não substituem esse teste visual no navegador.
 
 **Verificações:** `npm run test`, `npm run qa:sanity`, `npm run build` e leitura do relatório `docs/QA_EVIDENCIAS.md`.
 **Limites:** interiores multinível, diálogos com animações, NPCs com rotina diária e toda a campanha permanecem para revisões posteriores. O prólogo ainda precisa de certificação de percurso humano no navegador.
+
+## REV4 — Missões 1–3 e checkpoints
+
+A campanha inicial agora registra estado ativo/falho/concluído, checkpoint e contador de retries. Na missão **A conta vence**, reforme a oficina, retire os documentos com Helena e entregue-os ao Bar Atlântico antes de 240 segundos de simulação. Se o prazo expirar, **R** ou o botão **REPETIR** recomeça o objetivo corrente sem remover reformas ou duplicar recompensas. Pausas interrompem o contador. Saves da REV3 são migrados para o novo fluxo; um save anterior válido é guardado como backup local. Consulte `docs/QA_REV4_MISSOES.md` para cobertura e pendências.
