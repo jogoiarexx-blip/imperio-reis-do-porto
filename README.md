@@ -49,3 +49,21 @@ O workflow `.github/workflows/deploy.yml` realiza teste, build e publicação pa
 ## Documentação
 
 O planejamento original integral, sem modificação, está em [`docs/GDD_IMPERIO_PORTO_VESPER.md`](docs/GDD_IMPERIO_PORTO_VESPER.md). Consulte [`docs/QA_ESTADO_INICIAL.md`](docs/QA_ESTADO_INICIAL.md) para o estado da publicação e limites de certificação.
+
+## Correção da publicação estática (REV2)
+
+O GitHub Pages estava servindo o HTML de desenvolvimento, que referencia `/src/main.ts`,
+porque a publicação Jekyll da branch `main` era executada depois do deploy Vite.
+Agora `index.dev.html` é o ponto de entrada editável usado pelo Vite,
+enquanto `index.html` na raiz é **sempre o HTML compilado** com caminhos relativos `./assets/`.
+`npm run build` cria `dist/index.html` após validar a saída. O workflow publica `dist/`
+e também sincroniza `index.html` e `assets/` no branch `main`, mantendo compatibilidade
+com Pages configurado para **GitHub Actions** ou **Deploy from a branch / main / (root)**.
+
+Durante desenvolvimento, abra `/index.dev.html` (o comando `npm run dev` já o abre).
+Não edite diretamente `index.html`: ele é regenerado a partir de `index.dev.html`.
+Caso o build falhe, o workflow não substitui a versão estável em `main`.
+
+**Teste de produção:** acesse a URL do Pages, abra o console do navegador,
+confirme ausência de requisição para `/src/main.ts` e presença de recursos em `./assets/`.
+Os testes automatizados não substituem esse teste visual no navegador.

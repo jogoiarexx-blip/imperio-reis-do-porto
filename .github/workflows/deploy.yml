@@ -4,7 +4,7 @@ on:
     branches: [main]
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 concurrency:
@@ -21,6 +21,20 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm run test
       - run: npm run build
+      # Compatível com as duas fontes de Pages: GitHub Actions e branch main /.
+      # A raiz nunca deve publicar index.html com /src/main.ts.
+      - name: Synchronize prebuilt site for branch-based Pages
+        shell: bash
+        run: |
+          cp dist/index.html index.html
+          rm -rf assets
+          cp -R dist/assets assets
+          touch .nojekyll
+          git add -A index.html assets .nojekyll
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'deploy: sync prebuilt GitHub Pages site [skip ci]'
+            git push origin HEAD:main
+          fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

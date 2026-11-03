@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#141a21" />
+  <title>IMPÉRIO — Reis de Porto Vesper</title>
+  <meta name="description" content="Prólogo jogável de IMPÉRIO: Reis de Porto Vesper, um drama criminal original ambientado em 1988." />
+</head>
+<body>
+  <div id="game"></div>
+  <div id="interface">
+    <header class="topline"><div class="wordmark">IMPÉRIO <span>REIS DE PORTO VESPER</span></div><div class="clock">SANTA ÂNGELA · 1988 <b id="clock">09:00</b></div></header>
+    <section class="status"><div class="eyebrow">DANTE VALENÇA</div><div class="stat">SAÚDE <strong id="health">100</strong> <span class="sep">·</span> CAIXA <strong id="money">R$ 500</strong></div><div class="heat"><span>PRESSÃO POLICIAL</span><span id="heat">□□□□□</span></div></section>
+    <section class="mission"><div class="eyebrow">CAPÍTULO I · SANTA ÂNGELA</div><h2 id="mission-title">O retorno</h2><p id="mission-objective">Explore o bairro</p></section>
+    <div id="prompt" class="prompt hidden"></div>
+    <div id="notice" class="notice hidden"></div>
+    <nav class="toolbar"><button id="btn-save" type="button">SALVAR</button><button id="btn-load" type="button">CARREGAR</button><button id="btn-empire" type="button">IMPÉRIO [I]</button><button id="btn-map" type="button">MAPA [M]</button></nav>
+    <section class="performance" id="performance">FPS -- · 4 quadras · 28 imóveis</section>
+    <div class="help">WASD MOVER · MOUSE ARRASTAR CÂMERA · SHIFT CORRER · E INTERAGIR · ESC PAUSAR</div>
+  </div>
+  <div class="modal" id="intro"><div class="modal-card hero"><div class="eyebrow">UM DRAMA CRIMINAL ORIGINAL · 1988</div><h1>IMPÉRIO</h1><h3>REIS DE PORTO VESPER</h3><p>Na cidade onde cada favor tem um preço, o poder começa numa pequena oficina. Volte às ruas de Santa Ângela e decida como a história de Dante Valença será escrita.</p><div class="hero-footer"><button id="btn-start" class="primary" type="button">COMEÇAR O PRÓLOGO</button><span>VERSÃO INICIAL · PROTÓTIPO</span></div></div></div>
+  <div class="modal hidden" id="modal"><div class="modal-card"><div class="eyebrow" id="modal-kicker">PORTO VESPER</div><h2 id="modal-title">Menu</h2><div id="modal-body"></div><div id="modal-actions"><button id="btn-close" class="primary" type="button">VOLTAR AO JOGO</button></div></div></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
