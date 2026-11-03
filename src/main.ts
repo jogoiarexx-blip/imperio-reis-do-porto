@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import './style.css';
 import {generateCity,validateCity,type Building} from './world/CityGenerator';
 import {buildCity,contains} from './world/renderCity';
+import {carFits,driveStep} from './game/Driving';
 import {AnimatedPerson,loadPerson} from './game/AnimatedPeople';
 import {doorDistance,isNearNpc,nearestStreetDoor,transitionAtDoor} from './game/Interaction';
 import {advanceMission,chooseBellori,clockText,initialState,loadState,missionObjective,missionTitles,renovateWorkshop,saveState,tickEconomy,WORKSHOP_ID,WORKSHOP_RENOVATED_INCOME,WORKSHOP_BASE_INCOME,RENOVATION_COST,tickMission,retryMission,missionDestination,type SaveState} from './game/Systems';
@@ -11,7 +12,8 @@ const world=generateCity(8821),errors=validateCity(world);
 if(errors.length)throw new Error(`Falha de topologia: ${errors.join('; ')}`);
 let state:SaveState=loadState(world)??initialState(world);
 let started=false,paused=false,inside:Building|null=world.buildings.find(b=>b.id===state.interiorId)??null,driving=false,covered=false,noticeRemaining=0;
-let inspectorOpen=false,autosaveElapsed=0,autosaveFailed=false;
+let inspectorOpen=false,autosaveElapsed=0,autosaveFailed=false,carSpeed=0;
+const buildingBounds=world.buildings.map(b=>b.bounds);
 function autosave(){
  if(!started)return;
  const ok=saveState(state);
@@ -51,7 +53,7 @@ const parkedCar=new THREE.Group();function carMesh(color:number){const g=new THR
  const chassis=new THREE.Mesh(new THREE.BoxGeometry(2,0.68,4.25),new THREE.MeshStandardMaterial({color,metalness:.36,roughness:.43}));chassis.position.y=.86;chassis.castShadow=true;g.add(chassis);
  const cabin=new THREE.Mesh(new THREE.BoxGeometry(1.73,.71,2.15),new THREE.MeshStandardMaterial({color:0x536b73,metalness:.3,roughness:.24}));cabin.position.set(0,1.5,-.2);cabin.castShadow=true;g.add(cabin);
  for(const x of [-.92,.92])for(const z of [-1.36,1.36]){const w=new THREE.Mesh(new THREE.CylinderGeometry(.42,.42,.22,12),new THREE.MeshStandardMaterial({color:0x202124}));w.rotation.z=Math.PI/2;w.position.set(x,.49,z);g.add(w);}
- for(const x of [-.68,.68])for(const z of [-2.13,2.13]){const l=new THREE.Mesh(new THREE.BoxGeometry(.35,.23,.06),new THREE.MeshBasicMaterial({color:z<0?0xffe4ad:0xbd2626}));l.position.set(x,.9,z);g.add(l);}
+ for(const x of [-.68,.68])for(const z of [-2.13,2.13]){const l=new THREE.Mesh(new THREE.BoxGeometry(.35,.23,.06),new THREE.MeshBasicMaterial({color:z>0?0xffe4ad:0xbd2626}));l.position.set(x,.9,z);g.add(l);}
  return g;
 }
 parkedCar.add(carMesh(0x7e3537));parkedCar.position.set(state.vehicle.x,0,state.vehicle.z);parkedCar.rotation.y=state.vehicle.yaw;scene.add(parkedCar);
@@ -102,7 +104,7 @@ function openModal(title:string,body:string,kicker='PORTO VESPER',actions?:{labe
 function closeModal(){paused=false;$('modal').classList.add('hidden');}
 function retryFromCheckpoint(){
  if(!retryMission(state))return;
- inside=world.buildings.find(b=>b.id===state.interiorId)??null;driving=false;
+ inside=world.buildings.find(b=>b.id===state.interiorId)??null;driving=false;carSpeed=0;
  syncVehicle();syncAvatar();applyWorldState();closeModal();keys.clear();
  saveState(state);showNotice('Retomado do último checkpoint. Recompensas e reformas preservadas.',5);
 }
@@ -133,13 +135,14 @@ function interact(){
   syncAvatar();applyWorldState();saveState(state);showNotice(`Você saiu de ${b.name}.`,2.5);return;
  }
  if(driving){
+  if(Math.abs(carSpeed)>1){showNotice('Diminua a velocidade antes de sair do veículo.',3);return;}
   const a=parkedCar.rotation.y,offsetX=Math.cos(a)*2.9,offsetZ=-Math.sin(a)*2.9;
   const spots=[[parkedCar.position.x+offsetX,parkedCar.position.z+offsetZ],[parkedCar.position.x-offsetX,parkedCar.position.z-offsetZ]];
   const safe=spots.find(([x,z])=>allowed(x,z,false));
   if(!safe){showNotice('Pare em um local com espaço livre para sair do veículo.',3);return;}
-  driving=false;state.player.x=safe[0];state.player.z=safe[1];syncAvatar();showNotice('Você saiu do veículo.',2.5);return;
+  driving=false;carSpeed=0;state.player.x=safe[0];state.player.z=safe[1];syncAvatar();showNotice('Você saiu do veículo.',2.5);return;
  }
- if(Math.hypot(state.player.x-parkedCar.position.x,state.player.z-parkedCar.position.z)<5){driving=true;state.player.x=parkedCar.position.x;state.player.z=parkedCar.position.z;syncAvatar();showNotice('Dirigindo: WASD para acelerar, frear e virar. E para sair.',4);return;}
+ if(Math.hypot(state.player.x-parkedCar.position.x,state.player.z-parkedCar.position.z)<5){driving=true;carSpeed=0;state.player.x=parkedCar.position.x;state.player.z=parkedCar.position.z;syncAvatar();showNotice('Dirigindo: W acelera, S freia/dá ré, espaço freia. Pare para sair com E.',4);return;}
  const b=nearestStreetDoor(world,state.player.x,state.player.z);
  if(!b){showNotice('Aproxime-se da porta pela calçada da rua.',2);return;}
  if(!b.enterable){showNotice(`${b.name} é uma fachada cenográfica nesta versão.`,3);return;}
@@ -169,7 +172,7 @@ function mapModal(){const placeList=world.buildings.filter(b=>b.tier==='full').m
  openModal('Mapa do bairro',`<p><strong>Santa Ângela:</strong> 4 quarteirões, 28 imóveis contíguos e 6 segmentos de rua.</p>${placeList}<p class="small-note">Os outros distritos de Porto Vesper estão previstos no GDD, mas ainda não são exploráveis.</p>`,'GEOGRAFIA URBANA · SANTA ÂNGELA');}
 $('btn-start').addEventListener('click',()=>{started=true;$('intro').classList.add('hidden');if(state.missionRuntime.status==='failed')missionFailed();else showNotice('Dante Valença está de volta a Porto Vesper. Vá até a Oficina Valença.',6);});
 $('btn-save').addEventListener('click',()=>showNotice(saveState(state)?'Partida salva neste navegador.':'Não foi possível salvar nesta sessão.',3));
-$('btn-load').addEventListener('click',()=>{const saved=loadState(world);if(!saved){showNotice('Nenhum save compatível encontrado.',3);return;}state=saved;inside=world.buildings.find(b=>b.id===saved.interiorId)??null;driving=false;syncVehicle();applyWorldState();syncAvatar();if(state.missionRuntime.status==='failed')missionFailed();else showNotice('Partida restaurada.',3);});
+$('btn-load').addEventListener('click',()=>{const saved=loadState(world);if(!saved){showNotice('Nenhum save compatível encontrado.',3);return;}state=saved;inside=world.buildings.find(b=>b.id===saved.interiorId)??null;driving=false;carSpeed=0;syncVehicle();applyWorldState();syncAvatar();if(state.missionRuntime.status==='failed')missionFailed();else showNotice('Partida restaurada.',3);});
 $('btn-empire').addEventListener('click',empireModal);$('btn-map').addEventListener('click',mapModal);$('btn-retry').addEventListener('click',retryFromCheckpoint);
 window.addEventListener('keydown',e=>{if(['KeyW','KeyA','KeyS','KeyD','Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();keys.add(e.code);
  if(e.code==='F3'){e.preventDefault();inspectorOpen=!inspectorOpen;$('inspector').classList.toggle('hidden',!inspectorOpen);return;}
@@ -209,11 +212,15 @@ function allowed(x:number,z:number,forVehicle=driving,interiorContext:Building|n
  return true;
 }
 function movement(dt:number){let forward=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown'));
- let side=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));if(!forward&&!side)return;
- const n=Math.hypot(forward,side);forward/=n;side/=n;const fast=keys.has('ShiftLeft')||keys.has('ShiftRight');let speed=inside?2.9:fast?6.4:3.6;
+ let side=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));
+ const fast=keys.has('ShiftLeft')||keys.has('ShiftRight');
+ if(driving){
+  const next=driveStep({...state.vehicle,speed:carSpeed},{throttle:forward,steer:side,brake:keys.has('Space'),fast},dt,p=>carFits(p,buildingBounds));
+  carSpeed=next.speed;state.vehicle={x:next.x,z:next.z,yaw:next.yaw};state.player.x=next.x;state.player.z=next.z;syncVehicle();return;
+ }
+ if(!forward&&!side)return;
+ const n=Math.hypot(forward,side);forward/=n;side/=n;let speed=inside?2.9:fast?6.4:3.6;
  if(covered)speed*=.62;
- if(driving){parkedCar.rotation.y-=side*dt*1.35;state.vehicle.yaw=parkedCar.rotation.y;speed=fast?17:10;const dir=parkedCar.rotation.y;const nx=parkedCar.position.x+Math.sin(dir)*forward*speed*dt,nz=parkedCar.position.z+Math.cos(dir)*forward*speed*dt;
-  if(allowed(nx,nz)){parkedCar.position.set(nx,0,nz);state.player.x=nx;state.player.z=nz;state.vehicle={x:nx,z:nz,yaw:parkedCar.rotation.y};}return;}
  const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*side)*speed*dt,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*side)*speed*dt;
  const nx=state.player.x+dx,nz=state.player.z+dz;
  if(allowed(nx,state.player.z))state.player.x=nx;

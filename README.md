@@ -35,6 +35,7 @@ Requer Node.js 20+. Execute `npm install`, depois `npm run dev`. Use `npm run te
 | WASD / setas | Mover a pé ou dirigir |
 | Mouse arrastando | Girar câmera |
 | Shift | Correr / acelerar |
+| Espaço | Frear o carro |
 | E | Entrar e sair de prédio/veículo |
 | I | Gestão do império |
 | M | Mapa |
@@ -95,3 +96,7 @@ A campanha completa, os distritos adicionais, combate funcional e os demais sist
 ## Personagens animados
 
 Dante e seis pedestres usam modelos animados de Quaternius (CC0), obtidos do projeto Cidade Livre. Os movimentos incluem repouso, caminhada e corrida; os modelos procedurais anteriores funcionam como alternativa se o carregamento falhar. Os dois arquivos GLB acrescentam aproximadamente 1,1 MB ao carregamento. Consulte [CREDITS.md](CREDITS.md).
+
+## Direção arcade
+
+O carro tem aceleração progressiva, desaceleração, marcha à ré e freio com espaço. A direção depende da velocidade, e é preciso reduzir antes de sair. O contorno completo do veículo é verificado contra prédios e limites da cidade. O trânsito continua simplificado e não há colisão física entre veículos.
