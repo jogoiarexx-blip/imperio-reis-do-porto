@@ -1,4 +1,4 @@
-import type {CityManifest} from '../world/CityGenerator';
+import {generateCity, type CityManifest} from '../world/CityGenerator';
 
 export const WORKSHOP_ID = 'BLD-BLK-SA-01-LOT-N1';
 export const RENOVATION_COST = 300;
@@ -55,8 +55,12 @@ export function normalizeState(world:CityManifest,raw:unknown):SaveState|null{
   if(s.schemaVersion!==1||s.seed!==world.seed||s.generatorVersion!==world.generatorVersion)return null;
   if(!s.player||!Number.isFinite(s.player.x)||!Number.isFinite(s.player.z)||!Number.isFinite(s.player.money)||!Number.isFinite(s.player.health))return null;
   if(!s.mission||!['m01','m02','m03','end'].includes(s.mission.id)||!Number.isInteger(s.mission.step)||!Array.isArray(s.mission.completed))return null;
+  const maxStep:Record<MissionId,number>={m01:1,m02:1,m03:2,end:0};
+  if(s.mission.step<0||s.mission.step>maxStep[s.mission.id])return null;
+  if(Math.abs(s.player.x)>=123||Math.abs(s.player.z)>=102||s.player.health<0||s.player.health>100||s.player.money<0)return null;
   if(!Array.isArray(s.owned)||!s.owned.every(x=>typeof x==='string')||!Number.isFinite(s.clock)||!Number.isFinite(s.lastCycle)||!Number.isFinite(s.heat))return null;
-  if(!s.reputation||typeof s.reputation!=='object')return null;
+  if(!s.reputation||typeof s.reputation!=='object'||Object.values(s.reputation).some(v=>!Number.isFinite(v)))return null;
+  if(typeof s.heat!=='number'||s.heat<0||s.heat>5||!Number.isInteger(s.heat))return null;
   const vehicle=s.vehicle&&Number.isFinite(s.vehicle.x)&&Number.isFinite(s.vehicle.z)&&Number.isFinite(s.vehicle.yaw)?s.vehicle:base.vehicle;
   // Saves REV1 não guardavam o imóvel: recuperar o interior pelo volume realmente ocupado.
   // Saves com interiorId inválido não deixam o jogador atravessar um prédio fechado.
@@ -109,7 +113,7 @@ export function saveState(s:SaveState):boolean{
     if(!encoded||JSON.parse(encoded).schemaVersion!==1)return false;
     const previous=localStorage.getItem(SAVE_KEY);
     if(previous){
-      try{const old=JSON.parse(previous);if(old?.schemaVersion===1&&old?.mission&&old?.player){
+      try{const old=JSON.parse(previous);if(normalizeState(generateCity(s.seed),old)){
         localStorage.setItem(SAVE_BACKUP_KEY,previous);
       }}catch{ /* não copiar save já corrompido para backup */ }
     }
