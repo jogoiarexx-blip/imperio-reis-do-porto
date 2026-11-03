@@ -10,7 +10,14 @@ const world=generateCity(8821),errors=validateCity(world);
 if(errors.length)throw new Error(`Falha de topologia: ${errors.join('; ')}`);
 let state:SaveState=loadState(world)??initialState(world);
 let started=false,paused=false,inside:Building|null=world.buildings.find(b=>b.id===state.interiorId)??null,driving=false,covered=false,noticeRemaining=0;
-let inspectorOpen=false;
+let inspectorOpen=false,autosaveElapsed=0,autosaveFailed=false;
+function autosave(){
+ if(!started)return;
+ const ok=saveState(state);
+ if(!ok&&!autosaveFailed)showNotice('Não foi possível salvar automaticamente. Verifique o armazenamento do navegador.',6);
+ autosaveFailed=!ok;autosaveElapsed=0;
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)autosave();});
 const keys=new Set<string>(),clock=new THREE.Clock(),raycaster=new THREE.Raycaster();
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x78858d);scene.fog=new THREE.FogExp2(0x78858d,0.0036);
 const camera=new THREE.PerspectiveCamera(64,innerWidth/innerHeight,0.15,520);
@@ -226,6 +233,7 @@ function atmosphere(){const t=(state.clock%1440)/1440,day=Math.max(0,Math.sin(Ma
 let frame=0,fpsTime=0,frames=0;function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.05);
  if(started&&!paused){movement(dt);if(tickMission(state,dt))missionFailed();state.clock+=dt*.52;if(state.clock>=1440){state.clock-=1440;state.lastCycle=-1;}
   tickEconomy(state);
+  autosaveElapsed+=dt;if(autosaveElapsed>=15)autosave();
   if(frame%18===0)applyWorldState();
   for(const c of movingCars){c.t+=dt*c.speed/routeLength(c.route)*c.route.length;moveAround(c.route,c.t,c.mesh);}
   for(const npc of walkers){npc.flee=Math.max(0,npc.flee-dt);npc.t+=dt*npc.speed/routeLength(npc.route)*npc.route.length*(npc.flee?1.8:1);moveAround(npc.route,npc.t,npc.mesh);}
