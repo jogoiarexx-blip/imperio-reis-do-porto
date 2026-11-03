@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import './style.css';
 import {generateCity,validateCity,type Building} from './world/CityGenerator';
 import {buildCity,contains} from './world/renderCity';
+import {AnimatedPerson,loadPerson} from './game/AnimatedPeople';
 import {doorDistance,isNearNpc,nearestStreetDoor,transitionAtDoor} from './game/Interaction';
 import {advanceMission,chooseBellori,clockText,initialState,loadState,missionObjective,missionTitles,renovateWorkshop,saveState,tickEconomy,WORKSHOP_ID,WORKSHOP_RENOVATED_INCOME,WORKSHOP_BASE_INCOME,RENOVATION_COST,tickMission,retryMission,missionDestination,type SaveState} from './game/Systems';
 
@@ -10,7 +11,14 @@ const world=generateCity(8821),errors=validateCity(world);
 if(errors.length)throw new Error(`Falha de topologia: ${errors.join('; ')}`);
 let state:SaveState=loadState(world)??initialState(world);
 let started=false,paused=false,inside:Building|null=world.buildings.find(b=>b.id===state.interiorId)??null,driving=false,covered=false,noticeRemaining=0;
-let inspectorOpen=false;
+let inspectorOpen=false,autosaveElapsed=0,autosaveFailed=false;
+function autosave(){
+ if(!started)return;
+ const ok=saveState(state);
+ if(!ok&&!autosaveFailed)showNotice('Não foi possível salvar automaticamente. Verifique o armazenamento do navegador.',6);
+ autosaveFailed=!ok;autosaveElapsed=0;
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)autosave();});
 const keys=new Set<string>(),clock=new THREE.Clock(),raycaster=new THREE.Raycaster();
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x78858d);scene.fog=new THREE.FogExp2(0x78858d,0.0036);
 const camera=new THREE.PerspectiveCamera(64,innerWidth/innerHeight,0.15,520);
@@ -36,6 +44,8 @@ function character(color:number,height=1.8):THREE.Group{
  g.scale.setScalar(height/1.8);return g;
 }
 avatar.add(character(0x283341));scene.add(avatar);
+let animatedDante:AnimatedPerson|null=null;
+loadPerson('suit_man').then(template=>{const person=new AnimatedPerson(template);avatar.clear();avatar.add(person.model);animatedDante=person;}).catch(()=>console.warn('Modelo de Dante indisponível; usando personagem provisório.'));
 let yaw=0.15,pitch=0.33,dragging=false,lastMouseX=0,lastMouseY=0;
 const parkedCar=new THREE.Group();function carMesh(color:number){const g=new THREE.Group();
  const chassis=new THREE.Mesh(new THREE.BoxGeometry(2,0.68,4.25),new THREE.MeshStandardMaterial({color,metalness:.36,roughness:.43}));chassis.position.y=.86;chassis.castShadow=true;g.add(chassis);
@@ -51,9 +61,10 @@ function addTraffic(){const routes=[
  [new THREE.Vector3(-102,0,0),new THREE.Vector3(102,0,0),new THREE.Vector3(102,0,-92),new THREE.Vector3(-102,0,-92)],
  [new THREE.Vector3(-104,0,92),new THREE.Vector3(104,0,92),new THREE.Vector3(104,0,-2),new THREE.Vector3(-104,0,-2)]
  ];routes.forEach((route,i)=>{const mesh=carMesh([0x647b7c,0xbab2a3,0x494956][i]);scene.add(mesh);movingCars.push({mesh,route,t:i*.24,speed:7.5+i*2});});}addTraffic();
-const walkers:{mesh:THREE.Group;route:THREE.Vector3[];t:number;speed:number;flee:number}[]=[];
+const walkers:{mesh:THREE.Group;route:THREE.Vector3[];t:number;speed:number;flee:number;person?:AnimatedPerson}[]=[];
 const sidewalkRoutes=world.blocks.map(b=>{const d=b.bounds;return [new THREE.Vector3(d.minX-2.4,0,d.minZ-2.6),new THREE.Vector3(d.maxX+2.4,0,d.minZ-2.6),new THREE.Vector3(d.maxX+2.4,0,d.maxZ+2.6),new THREE.Vector3(d.minX-2.4,0,d.maxZ+2.6)];});
 for(let i=0;i<12;i++){const mesh=character([0x64574e,0x394c50,0x4b505d,0x756c5c][i%4],1.55+(i%4)*.07);scene.add(mesh);walkers.push({mesh,route:sidewalkRoutes[i%4],t:(i%3)*.29,speed:1.08+(i%4)*.19,flee:0});}
+loadPerson('casual_woman').then(template=>{walkers.forEach((walker,i)=>{if(i%2!==0)return;const person=new AnimatedPerson(template,1.62+(i%4)*.07);walker.mesh.clear();walker.mesh.add(person.model);walker.person=person;});}).catch(()=>console.warn('Modelos de pedestres indisponíveis; usando personagens provisórios.'));
 function moveAround(route:THREE.Vector3[],time:number,obj:THREE.Group){const seg=Math.floor(time)%route.length,u=time%1;const a=route[seg],b=route[(seg+1)%route.length];obj.position.lerpVectors(a,b,u);obj.rotation.y=Math.atan2(b.x-a.x,b.z-a.z);}
 function routeLength(route:THREE.Vector3[]){let n=0;for(let i=0;i<route.length;i++)n+=route[i].distanceTo(route[(i+1)%route.length]);return n;}
 function viewPosition(){return driving?parkedCar.position:avatar.position;}
@@ -224,11 +235,13 @@ function atmosphere(){const t=(state.clock%1440)/1440,day=Math.max(0,Math.sin(Ma
  sun.intensity=.18+day*2.4;hemi.intensity=.3+day*1.7;sun.position.set(Math.sin(t*Math.PI*2)*80,12+day*90,-50);
 }
 let frame=0,fpsTime=0,frames=0;function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.05);
- if(started&&!paused){movement(dt);if(tickMission(state,dt))missionFailed();state.clock+=dt*.52;if(state.clock>=1440){state.clock-=1440;state.lastCycle=-1;}
+ if(started&&!paused){const oldX=state.player.x,oldZ=state.player.z;movement(dt);
+  if(animatedDante){animatedDante.move(driving?0:Math.hypot(state.player.x-oldX,state.player.z-oldZ)/Math.max(dt,.001));animatedDante.update(dt);}if(tickMission(state,dt))missionFailed();state.clock+=dt*.52;if(state.clock>=1440){state.clock-=1440;state.lastCycle=-1;}
   tickEconomy(state);
+  autosaveElapsed+=dt;if(autosaveElapsed>=15)autosave();
   if(frame%18===0)applyWorldState();
   for(const c of movingCars){c.t+=dt*c.speed/routeLength(c.route)*c.route.length;moveAround(c.route,c.t,c.mesh);}
-  for(const npc of walkers){npc.flee=Math.max(0,npc.flee-dt);npc.t+=dt*npc.speed/routeLength(npc.route)*npc.route.length*(npc.flee?1.8:1);moveAround(npc.route,npc.t,npc.mesh);}
+  for(const npc of walkers){npc.flee=Math.max(0,npc.flee-dt);npc.t+=dt*npc.speed/routeLength(npc.route)*npc.route.length*(npc.flee?1.8:1);moveAround(npc.route,npc.t,npc.mesh);if(npc.person){npc.person.move(npc.speed*(npc.flee?1.8:1));npc.person.update(dt);}}
   noticeRemaining-=dt;if(noticeRemaining<=0)$('notice').classList.add('hidden');
  }
  updateCamera(dt);atmosphere();if((frame++%8)===0)updateUI();

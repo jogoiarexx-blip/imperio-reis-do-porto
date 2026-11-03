@@ -85,3 +85,13 @@ Os testes automatizados não substituem esse teste visual no navegador.
 ## REV4 — Missões 1–3 e checkpoints
 
 A campanha inicial agora registra estado ativo/falho/concluído, checkpoint e contador de retries. Na missão **A conta vence**, reforme a oficina, retire os documentos com Helena e entregue-os ao Bar Atlântico antes de 240 segundos de simulação. Se o prazo expirar, **R** ou o botão **REPETIR** recomeça o objetivo corrente sem remover reformas ou duplicar recompensas. Pausas interrompem o contador. Saves da REV3 são migrados para o novo fluxo; um save anterior válido é guardado como backup local. Consulte `docs/QA_REV4_MISSOES.md` para cobertura e pendências.
+
+## REV5 — Proteção do progresso
+
+A partida é salva automaticamente a cada 15 segundos de jogo ativo e ao colocar a página em segundo plano. Caso o armazenamento falhe, aparece um aviso. Saves com dados inválidos de missão, posição, saúde, dinheiro, reputação ou pressão policial são rejeitados; um arquivo principal danificado não substitui o backup válido. O salvamento continua local ao navegador e não é sincronizado entre aparelhos.
+
+A campanha completa, os distritos adicionais, combate funcional e os demais sistemas previstos no GDD continuam em desenvolvimento. Esta revisão não os implementa nem certifica um percurso visual completo no navegador.
+
+## Personagens animados
+
+Dante e seis pedestres usam modelos animados de Quaternius (CC0), obtidos do projeto Cidade Livre. Os movimentos incluem repouso, caminhada e corrida; os modelos procedurais anteriores funcionam como alternativa se o carregamento falhar. Os dois arquivos GLB acrescentam aproximadamente 1,1 MB ao carregamento. Consulte [CREDITS.md](CREDITS.md).
