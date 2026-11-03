@@ -10,9 +10,11 @@ A REV3 permitia avançar M01–M03 apenas pelas etapas, sem missão falha nem re
 | MISSION-102 | M03 retira documentos antes de entregar | pass (lógica local) | `tests/mission-fsm.test.ts` | Não observada |
 | MISSION-103 | Timer, falha, retry, reload e backup | pass (lógica local) | `tests/mission-fsm.test.ts` | Não observada |
 | MAP-101 | Rota externa entre oficina e bar sem prédio atravessado | pass (rota espacial automatizada) | `tests/mission-fsm.test.ts` | Não observada |
-| CI-101 | Vitest, verificação TS/Vite e publicação Pages | pending CI | GitHub Actions após commit | Não verificada |
-| PLAY-101 | Percurso humano integral com navegação e diálogos | not run | Teste no Chromium após publicação | Não certificada |
+| CI-101 | Vitest, verificação TS/Vite e publicação Pages | pass CI | Vitest + qa:sanity + build + deploy: Actions run 41653029452 | Não observada |
+| PLAY-101 | Percurso humano integral com navegação e diálogos | blocked | Chromium bloqueou acesso HTTP local e file:// (ERR_BLOCKED_BY_ADMINISTRATOR) | Não certificada |
 | PERF-101 | FPS e draw calls antes/depois | not run | Aferição em navegador com mesma rota | Não certificada |
+
+**Publicação:** `41653029452` (Actions/Vite) aprovado; `41653085224` (Pages/branch compilada) aprovado. Os recursos finais são `./assets/index.dev-B8rAeuF1.js` e `./assets/index-8CVnOvhU.css`. O `index.html` publicado não referencia `/src/main.ts`.
 
 ## Histórico
 
