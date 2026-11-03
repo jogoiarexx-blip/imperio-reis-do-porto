@@ -2,9 +2,20 @@
 
 Protótipo 3D original de mundo aberto em **Porto Vesper, 1988**, com **Dante Valença** como protagonista. Base técnica reconstruída a partir do GDD e do código exportado em PDF da conversa do Gemini. O PDF estava parcialmente cortado nas linhas de código, por isso esta publicação contém uma versão fonte organizada e corrigida para uso no GitHub, **não uma transcrição literal do PDF**.
 
+## REV1 — Continuidade (03/11/2026)
+
+- Reforma da Oficina Valença agora custa R$ 300 **apenas uma vez**, altera a fachada e aumenta a receita por hora de R$ 155 para R$ 225; o efeito persiste no save.
+- Diálogo Bellori tem consequência **única e persistente**, sem explorar reputação ilimitada.
+- Saves antigos são migrados para preservar campanha/dinheiro e acrescentar estado de reforma, decisão e posição do carro.
+- Portas de imóveis acessíveis abrem na dobradiça durante a visita; interiores bloqueiam movimento em balcões/prateleiras.
+- Saída do carro exige espaço lateral; a colisão do carro tem envelope maior.
+- Correção do workflow de GitHub Pages para não solicitar configuração administrativa sem permissão.
+
+Veja [`docs/QA_REV1_PERSISTENCIA.md`](docs/QA_REV1_PERSISTENCIA.md) para as evidências e limitações.
+
 ## Executar
 
-Requer Node.js 20+. Execute `npm install`, depois `npm run dev`. Use `npm run test` para verificar o gerador urbano e a economia; `npm run build` gera `dist/`.
+Requer Node.js 20+. Execute `npm install`, depois `npm run dev`. Use `npm run test` para verificar o gerador urbano, a economia e a persistência; `npm run build` gera `dist/`.
 
 ## O que existe nesta primeira publicação
 

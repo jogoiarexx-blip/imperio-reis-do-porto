@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import './style.css';
 import {generateCity,validateCity,type Building} from './world/CityGenerator';
 import {buildCity,contains,nearbyBuilding} from './world/renderCity';
-import {advanceMission,clockText,initialState,loadState,missionObjective,missionTitles,saveState,tickEconomy,type SaveState} from './game/Systems';
+import {advanceMission,chooseBellori,clockText,initialState,loadState,missionObjective,missionTitles,renovateWorkshop,saveState,tickEconomy,WORKSHOP_ID,WORKSHOP_RENOVATED_INCOME,WORKSHOP_BASE_INCOME,RENOVATION_COST,type SaveState} from './game/Systems';
 
 const $=(id:string)=>document.getElementById(id)!;
 const world=generateCity(8821),errors=validateCity(world);
@@ -42,7 +42,7 @@ const parkedCar=new THREE.Group();function carMesh(color:number){const g=new THR
  for(const x of [-.68,.68])for(const z of [-2.13,2.13]){const l=new THREE.Mesh(new THREE.BoxGeometry(.35,.23,.06),new THREE.MeshBasicMaterial({color:z<0?0xffe4ad:0xbd2626}));l.position.set(x,.9,z);g.add(l);}
  return g;
 }
-parkedCar.add(carMesh(0x7e3537));parkedCar.position.set(-85,0,-92);scene.add(parkedCar);
+parkedCar.add(carMesh(0x7e3537));parkedCar.position.set(state.vehicle.x,0,state.vehicle.z);parkedCar.rotation.y=state.vehicle.yaw;scene.add(parkedCar);
 const movingCars:{mesh:THREE.Group;route:THREE.Vector3[];t:number;speed:number}[]=[];
 function addTraffic(){const routes=[
  [new THREE.Vector3(-106,0,-88),new THREE.Vector3(-106,0,88),new THREE.Vector3(106,0,88),new THREE.Vector3(106,0,-88)],
@@ -55,8 +55,14 @@ for(let i=0;i<12;i++){const mesh=character([0x64574e,0x394c50,0x4b505d,0x756c5c]
 function moveAround(route:THREE.Vector3[],time:number,obj:THREE.Group){const seg=Math.floor(time)%route.length,u=time%1;const a=route[seg],b=route[(seg+1)%route.length];obj.position.lerpVectors(a,b,u);obj.rotation.y=Math.atan2(b.x-a.x,b.z-a.z);}
 function routeLength(route:THREE.Vector3[]){let n=0;for(let i=0;i<route.length;i++)n+=route[i].distanceTo(route[(i+1)%route.length]);return n;}
 function viewPosition(){return driving?parkedCar.position:avatar.position;}
+function applyWorldState(){
+ city.renovationByBuilding.forEach((mesh,id)=>{mesh.visible=state.renovated.includes(id);});
+ city.roofByBuilding.forEach((mesh,id)=>{mesh.visible=inside?.id!==id;});
+ city.doorByBuilding.forEach((hinge,id)=>{const b=world.buildings.find(x=>x.id===id);hinge.rotation.y=inside?.id===id&&b?b.entrance.side*1.65:0;});
+}
+function syncVehicle(){parkedCar.position.set(state.vehicle.x,0,state.vehicle.z);parkedCar.rotation.y=state.vehicle.yaw;}
 function syncAvatar(){avatar.position.set(state.player.x,0.18,state.player.z);if(!driving){parkedCar.visible=true;avatar.visible=true;}else{avatar.visible=false;parkedCar.visible=true;}}
-syncAvatar();
+syncAvatar();applyWorldState();
 function showNotice(text:string,secs=5){$('notice').textContent=text;$('notice').classList.remove('hidden');noticeRemaining=secs;}
 function updateUI(){
  $('health').textContent=String(Math.round(state.player.health));$('money').textContent=`R$ ${Math.round(state.player.money).toLocaleString('pt-BR')}`;
@@ -71,33 +77,49 @@ function openModal(title:string,body:string,kicker='PORTO VESPER',actions?:{labe
  const slot=$('modal-actions');slot.innerHTML='';for(const a of actions??[{label:'VOLTAR AO JOGO',run:closeModal}]){const b=document.createElement('button');b.textContent=a.label;b.className='primary';b.addEventListener('click',a.run);slot.appendChild(b);} $('modal').classList.remove('hidden');}
 function closeModal(){paused=false;$('modal').classList.add('hidden');}
 function interact(){
- if(inside){const b=inside;inside=null;state.player.x=b.entrance.x;state.player.z=b.entrance.z+b.entrance.side*3.1;city.roofByBuilding.get(b.id)!.visible=true;showNotice(`Você saiu de ${b.name}.`,2.5);return;}
- if(driving){driving=false;state.player.x=parkedCar.position.x+3;state.player.z=parkedCar.position.z;syncAvatar();showNotice('Você saiu do veículo.',2.5);return;}
- if(Math.hypot(state.player.x-parkedCar.position.x,state.player.z-parkedCar.position.z)<5){driving=true;state.player.x=parkedCar.position.x;state.player.z=parkedCar.position.z;showNotice('Dirigindo: WASD para acelerar, frear e virar. E para sair.',4);return;}
+ if(inside){const b=inside;inside=null;state.player.x=b.entrance.x;state.player.z=b.entrance.z+b.entrance.side*3.1;applyWorldState();showNotice(`Você saiu de ${b.name}.`,2.5);return;}
+ if(driving){
+  const a=parkedCar.rotation.y,offsetX=Math.cos(a)*2.9,offsetZ=-Math.sin(a)*2.9;
+  const spots=[[parkedCar.position.x+offsetX,parkedCar.position.z+offsetZ],[parkedCar.position.x-offsetX,parkedCar.position.z-offsetZ]];
+  const safe=spots.find(([x,z])=>allowed(x,z,false));
+  if(!safe){showNotice('Pare em um local com espaço livre para sair do veículo.',3);return;}
+  driving=false;state.player.x=safe[0];state.player.z=safe[1];syncAvatar();showNotice('Você saiu do veículo.',2.5);return;
+ }
+ if(Math.hypot(state.player.x-parkedCar.position.x,state.player.z-parkedCar.position.z)<5){driving=true;state.player.x=parkedCar.position.x;state.player.z=parkedCar.position.z;syncAvatar();showNotice('Dirigindo: WASD para acelerar, frear e virar. E para sair.',4);return;}
  const b=nearbyBuilding(world,state.player.x,state.player.z,5.5);
  if(!b){showNotice('Aproxime-se de uma entrada identificada.',2);return;}
  if(!b.enterable){showNotice(`${b.name} é uma fachada cenográfica nesta versão.`,3);return;}
- inside=b;state.player.x=b.entrance.x;state.player.z=b.entrance.z-b.entrance.side*2.1;city.roofByBuilding.get(b.id)!.visible=false;
- const dialogue=advanceMission(state,b.name);if(dialogue)showNotice(dialogue,7);else showNotice(`Você entrou em ${b.name}.`,2);
- if(state.mission.id==='m02'&&state.mission.step===1&&b.name==='Bar Atlântico'){
+ inside=b;state.player.x=b.entrance.x;state.player.z=b.entrance.z-b.entrance.side*2.1;applyWorldState();
+ const dialogue=advanceMission(state,b.name);if(dialogue){showNotice(dialogue,7);saveState(state);}else showNotice(`Você entrou em ${b.name}.`,2);
+ if(state.mission.id==='m02'&&state.mission.step===1&&!state.belloriDecision&&b.name==='Bar Atlântico'){
   openModal('O convite Bellori','<p>O emissário estende a mão. Há sempre um preço por trás de um acordo nesta cidade.</p>','UMA ESCOLHA, UMA CONSEQUÊNCIA',[
-   {label:'TRATAR COM RESPEITO',run:()=>{state.reputation.bellori+=7;closeModal();showNotice('A família Bellori respeita sua postura.',4);}},
-   {label:'RECUSAR A PRESSÃO',run:()=>{state.reputation.bellori-=6;state.heat=Math.min(5,state.heat+1);closeModal();showNotice('Sua recusa não passou despercebida.',4);}}
+   {label:'TRATAR COM RESPEITO',run:()=>{if(chooseBellori(state,'respect'))saveState(state);closeModal();showNotice('A família Bellori respeita sua postura.',4);}},
+   {label:'RECUSAR A PRESSÃO',run:()=>{if(chooseBellori(state,'refuse'))saveState(state);closeModal();showNotice('Sua recusa não passou despercebida.',4);}}
   ]);
  }
 }
-function empireModal(){let cards='';for(const name of state.owned){cards+=`<div class="business-card"><h3>${name}</h3><p>Operando · Receita líquida estimada R$ ${name==='Oficina Valença'?155:65}/hora de jogo</p></div>`;}
- const body=`<p>O seu poder começa nos negócios. Caixa atual: <strong>R$ ${Math.round(state.player.money).toLocaleString('pt-BR')}</strong>.</p>${cards}<p class="small-note">Sistema econômico inicial: receita horária, persistência por ciclo e reputação. Expansão territorial e funcionários avançados ainda planejados.</p><p>Relação Bellori: <strong>${state.reputation.bellori}</strong> · Pressão policial: <strong>${state.heat}/5</strong></p>`;
- openModal('Gestão do império',body,'OFICINA VALENÇA · SANTA ÂNGELA',[
-  {label:'REFORMAR OFICINA (R$ 300)',run:()=>{if(state.player.money<300){showNotice('Caixa insuficiente para a reforma.');return;}state.player.money-=300;state.reputation.valenca+=5;if(state.mission.id==='m03'&&state.mission.step===0)state.mission.step=1;closeModal();showNotice('Reforma autorizada. Reputação com os Valença aumentou.',5);}},
-  {label:'FECHAR',run:closeModal}
- ]);
+function empireModal(){
+ const renovated=state.renovated.includes(WORKSHOP_ID);
+ let cards='';for(const name of state.owned){
+  const income=name==='Oficina Valença'?(renovated?WORKSHOP_RENOVATED_INCOME:WORKSHOP_BASE_INCOME):65;
+  cards+=`<div class="business-card"><h3>${name}${name==='Oficina Valença'&&renovated?' · REFORMADA':''}</h3><p>Operando · Receita líquida R$ ${income}/hora de jogo</p></div>`;
+ }
+ const body=`<p>O seu poder começa nos negócios. Caixa atual: <strong>R$ ${Math.round(state.player.money).toLocaleString('pt-BR')}</strong>.</p>${cards}<p class="small-note">Reformar altera a fachada da oficina, aumenta sua receita e fica registrado no save. A compra só pode ocorrer uma vez.</p><p>Relação Bellori: <strong>${state.reputation.bellori}</strong> · Pressão policial: <strong>${state.heat}/5</strong></p>`;
+ const actions:{label:string;run:()=>void}[]=[];
+ if(!renovated)actions.push({label:`REFORMAR OFICINA (R$ ${RENOVATION_COST})`,run:()=>{
+  const result=renovateWorkshop(state);
+  if(result==='not-enough-money'){$('modal-body').insertAdjacentHTML('beforeend','<p role="status">Saldo insuficiente para a reforma.</p>');return;}
+  if(result==='not-owned'){$('modal-body').insertAdjacentHTML('beforeend','<p role="status">Você não controla este imóvel.</p>');return;}
+  applyWorldState();saveState(state);closeModal();showNotice(result==='ok'?'Oficina reformada! Nova fachada e receita ampliada. Progresso salvo.':'A oficina já foi reformada.',5);
+ }});
+ actions.push({label:'FECHAR',run:closeModal});
+ openModal('Gestão do império',body,'OFICINA VALENÇA · SANTA ÂNGELA',actions);
 }
-function mapModal(){const placeList=world.buildings.filter(b=>b.tier==='full').map(b=>`<div class="business-card"><h3>${b.name}</h3><p>Quadra ${b.blockId.replace('BLK-SA-','')} · ${b.kind} · Interior completo</p></div>`).join('');
+function mapModal(){const placeList=world.buildings.filter(b=>b.tier==='full').map(b=>`<div class="business-card"><h3>${b.name}</h3><p>Quadra ${b.blockId.replace('BLK-SA-','')} · ${b.kind} · Interior completo${state.renovated.includes(b.id)?' · REFORMADO':''}</p></div>`).join('');
  openModal('Mapa do bairro',`<p><strong>Santa Ângela:</strong> 4 quarteirões, 28 imóveis contíguos e 6 segmentos de rua.</p>${placeList}<p class="small-note">Os outros distritos de Porto Vesper estão previstos no GDD, mas ainda não são exploráveis.</p>`,'GEOGRAFIA URBANA · SANTA ÂNGELA');}
 $('btn-start').addEventListener('click',()=>{started=true;$('intro').classList.add('hidden');showNotice('Dante Valença está de volta a Porto Vesper. Vá até a Oficina Valença.',6);});
 $('btn-save').addEventListener('click',()=>showNotice(saveState(state)?'Partida salva neste navegador.':'Não foi possível salvar nesta sessão.',3));
-$('btn-load').addEventListener('click',()=>{const saved=loadState(world);if(!saved){showNotice('Nenhum save compatível encontrado.',3);return;}state=saved;inside=null;driving=false;city.roofByBuilding.forEach(v=>v.visible=true);syncAvatar();showNotice('Partida restaurada.',3);});
+$('btn-load').addEventListener('click',()=>{const saved=loadState(world);if(!saved){showNotice('Nenhum save compatível encontrado.',3);return;}state=saved;inside=null;driving=false;syncVehicle();applyWorldState();syncAvatar();showNotice('Partida restaurada.',3);});
 $('btn-empire').addEventListener('click',empireModal);$('btn-map').addEventListener('click',mapModal);
 window.addEventListener('keydown',e=>{if(['KeyW','KeyA','KeyS','KeyD','Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();keys.add(e.code);
  if(e.repeat||!started)return;if(e.code==='Escape'){if(!$('modal').classList.contains('hidden'))closeModal();else openModal('Jogo pausado','<p>O relógio, o tráfego e a simulação ficam suspensos enquanto o menu estiver aberto.</p>');return;}
@@ -110,16 +132,23 @@ window.addEventListener('pointerup',()=>dragging=false);window.addEventListener(
 // O protótipo de tiro demonstra pressão policial sem simular combate completo.
 renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
 window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
-function allowed(x:number,z:number){if(Math.abs(x)>123||Math.abs(z)>102)return false;
- if(inside){return contains(inside.bounds,x,z,-.85);}
- for(const b of world.buildings){if(contains(b.bounds,x,z,.55))return false;}return true;
+function allowed(x:number,z:number,forVehicle=driving){
+ const radius=forVehicle?1.6:.42;
+ if(Math.abs(x)>123-radius||Math.abs(z)>102-radius)return false;
+ if(inside){
+  if(!contains(inside.bounds,x,z,-.85))return false;
+  const obstacles=city.interiorObstacles.get(inside.id)||[];
+  return !obstacles.some(bounds=>contains(bounds,x,z,.38));
+ }
+ for(const b of world.buildings){if(contains(b.bounds,x,z,radius))return false;}
+ return true;
 }
 function movement(dt:number){let forward=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown'));
  let side=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));if(!forward&&!side)return;
  const n=Math.hypot(forward,side);forward/=n;side/=n;const fast=keys.has('ShiftLeft')||keys.has('ShiftRight');let speed=inside?2.9:fast?6.4:3.6;
  if(covered)speed*=.62;
- if(driving){parkedCar.rotation.y-=side*dt*1.35;speed=fast?17:10;const dir=parkedCar.rotation.y;const nx=parkedCar.position.x+Math.sin(dir)*forward*speed*dt,nz=parkedCar.position.z+Math.cos(dir)*forward*speed*dt;
-  if(allowed(nx,nz)){parkedCar.position.set(nx,0,nz);state.player.x=nx;state.player.z=nz;}return;}
+ if(driving){parkedCar.rotation.y-=side*dt*1.35;state.vehicle.yaw=parkedCar.rotation.y;speed=fast?17:10;const dir=parkedCar.rotation.y;const nx=parkedCar.position.x+Math.sin(dir)*forward*speed*dt,nz=parkedCar.position.z+Math.cos(dir)*forward*speed*dt;
+  if(allowed(nx,nz)){parkedCar.position.set(nx,0,nz);state.player.x=nx;state.player.z=nz;state.vehicle={x:nx,z:nz,yaw:parkedCar.rotation.y};}return;}
  const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*side)*speed*dt,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*side)*speed*dt;
  const nx=state.player.x+dx,nz=state.player.z+dz;
  if(allowed(nx,state.player.z))state.player.x=nx;

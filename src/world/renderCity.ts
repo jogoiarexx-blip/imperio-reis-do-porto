@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type {Building,Bounds,CityManifest} from './CityGenerator';
 
-export type CityVisual={root:THREE.Group;doors:THREE.Object3D[];interiors:Map<string,THREE.Group>;roofByBuilding:Map<string,THREE.Object3D>;clickables:THREE.Object3D[]};
+export type CityVisual={root:THREE.Group;doors:THREE.Object3D[];interiors:Map<string,THREE.Group>;roofByBuilding:Map<string,THREE.Object3D>;doorByBuilding:Map<string,THREE.Group>;renovationByBuilding:Map<string,THREE.Group>;interiorObstacles:Map<string,Bounds[]>;clickables:THREE.Object3D[]};
 const mat=(color:number,roughness=0.83)=>new THREE.MeshStandardMaterial({color,roughness});
 const asphalt=mat(0x292d35),concrete=mat(0x858486),floorMat=mat(0x806e5a);
 function box(w:number,h:number,d:number,color:number|THREE.Material):THREE.Mesh{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),typeof color==='number'?mat(color):color);m.castShadow=true;m.receiveShadow=true;return m;}
@@ -14,7 +14,7 @@ function addLabel(group:THREE.Group,label:string,x:number,y:number,z:number,widt
  mesh.position.set(x,y,z);group.add(mesh);
 }
 export function buildCity(world:CityManifest):CityVisual{
- const root=new THREE.Group(),doors:THREE.Object3D[]=[],interiors=new Map<string,THREE.Group>(),roofByBuilding=new Map<string,THREE.Object3D>(),clickables:THREE.Object3D[]=[];
+ const root=new THREE.Group(),doors:THREE.Object3D[]=[],interiors=new Map<string,THREE.Group>(),roofByBuilding=new Map<string,THREE.Object3D>(),doorByBuilding=new Map<string,THREE.Group>(),renovationByBuilding=new Map<string,THREE.Group>(),interiorObstacles=new Map<string,Bounds[]>(),clickables:THREE.Object3D[]=[];
  const ground=new THREE.Mesh(new THREE.PlaneGeometry(460,400),mat(0x3e4740));ground.rotation.x=-Math.PI/2;ground.position.y=-0.06;ground.receiveShadow=true;root.add(ground);
  // Toda a malha viária vem do mesmo manifesto usado pelos lotes.
  for(const s of world.streets){const vertical=s.x1===s.x2;const length=vertical?Math.abs(s.z2-s.z1):Math.abs(s.x2-s.x1);
@@ -43,12 +43,27 @@ export function buildCity(world:CityManifest):CityVisual{
     const roof=box(w+0.45,0.38,d+0.45,dark);roof.position.set(x,0.17+h,z);g.add(roof);roofByBuilding.set(b.id,roof);
     const groundInside=box(w-0.8,0.12,d-0.8,floorMat);groundInside.position.set(x,0.23,z);g.add(groundInside);
     const inside=new THREE.Group();
+    const obstacles:Bounds[]=[];
     const counter=box(Math.min(4,w-3),1,1.2,b.kind==='Oficina'?0x683d29:0x54331e);counter.position.set(x,0.85,z+3);inside.add(counter);
-    for(const sx of [-1,1]){const shelf=box(1.4,1.9,0.7,0x5c5147);shelf.position.set(x+sx*(w/2-1.4),1.12,z+2);inside.add(shelf);}
-    const lamp=new THREE.PointLight(0xffc486,12,18);lamp.position.set(x,2.9,z);inside.add(lamp);g.add(inside);interiors.set(b.id,inside);
+    obstacles.push({minX:x-Math.min(4,w-3)/2,maxX:x+Math.min(4,w-3)/2,minZ:z+2.4,maxZ:z+3.6});
+    for(const sx of [-1,1]){const shelf=box(1.4,1.9,0.7,0x5c5147);shelf.position.set(x+sx*(w/2-1.4),1.12,z+2);inside.add(shelf);
+      obstacles.push({minX:shelf.position.x-.7,maxX:shelf.position.x+.7,minZ:z+1.65,maxZ:z+2.35});}
+    const lamp=new THREE.PointLight(0xffc486,12,18);lamp.position.set(x,2.9,z);inside.add(lamp);g.add(inside);interiors.set(b.id,inside);interiorObstacles.set(b.id,obstacles);
   }else{g.add(shell);clickables.push(shell);}
   const frontZ=b.entrance.z+(b.entrance.side===-1?-0.04:0.04);
-  const door=box(1.45,2.22,0.12,b.enterable?0x7d5133:0x42474c);door.position.set(x,1.28,frontZ);door.userData={buildingId:b.id,name:b.name,enterable:b.enterable};g.add(door);doors.push(door);clickables.push(door);
+  // Eixo real na dobradiça: imóveis acessíveis abrem a porta para dentro.
+  const hinge=new THREE.Group();hinge.position.set(x-.73,0,frontZ);
+  const door=box(1.45,2.22,0.12,b.enterable?0x7d5133:0x42474c);door.position.set(.73,1.28,0);door.userData={buildingId:b.id,name:b.name,enterable:b.enterable};
+  hinge.add(door);g.add(hinge);doorByBuilding.set(b.id,hinge);doors.push(door);clickables.push(door);
+  if(b.name==='Oficina Valença'){
+    const upgrade=new THREE.Group();
+    const frame=mat(0xd8bb80),paint=mat(0x334b50);
+    for(const xx of [minX+.48,maxX-.48]){const p=box(.3,3.2,.38,frame);p.position.set(xx,1.8,frontZ);upgrade.add(p);}
+    const awning=box(w+.55,.23,2.1,paint);awning.position.set(x,3.36,frontZ+b.entrance.side*.85);upgrade.add(awning);
+    const fascia=box(w+.4,.69,.35,frame);fascia.position.set(x,4.02,frontZ);upgrade.add(fascia);
+    addLabel(upgrade,'VALENÇA · RESTAURADA',x,4.03,frontZ+b.entrance.side*.22,w);
+    upgrade.visible=false;g.add(upgrade);renovationByBuilding.set(b.id,upgrade);
+  }
   const signZ=frontZ+(b.entrance.side===-1?-0.16:0.16);
   if(b.kind!=='Residência')addLabel(g,b.name,x,3.12,signZ,w);
   const windowWidth=Math.max(1.0,Math.min(1.75,w/8));
@@ -72,7 +87,7 @@ export function buildCity(world:CityManifest):CityVisual{
  lamps.forEach((p,i)=>{dummy.position.copy(p);dummy.scale.set(1,1,1);dummy.updateMatrix();postMesh.setMatrixAt(i,dummy.matrix);});postMesh.instanceMatrix.needsUpdate=true;root.add(postMesh);
  const leaf=new THREE.InstancedMesh(new THREE.ConeGeometry(1.75,3.5,7),mat(0x385b43),trees.length);
  trees.forEach((p,i)=>{dummy.position.copy(p);dummy.updateMatrix();leaf.setMatrixAt(i,dummy.matrix);});leaf.instanceMatrix.needsUpdate=true;root.add(leaf);
- return {root,doors,interiors,roofByBuilding,clickables};
+ return {root,doors,interiors,roofByBuilding,doorByBuilding,renovationByBuilding,interiorObstacles,clickables};
 }
 export function contains(bounds:Bounds,x:number,z:number,pad=0){return x>bounds.minX-pad&&x<bounds.maxX+pad&&z>bounds.minZ-pad&&z<bounds.maxZ+pad;}
 export function nearbyBuilding(world:CityManifest,x:number,z:number,maxDistance=4):Building|null{let best:Building|null=null;let dist=maxDistance;for(const b of world.buildings){const d=Math.hypot(x-b.entrance.x,z-b.entrance.z);if(d<dist){dist=d;best=b;}}return best;}
